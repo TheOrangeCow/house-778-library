@@ -1,16 +1,12 @@
 <?php
-
 include "../chech.php"; 
 
-
 $file = __DIR__ . "/game.json";
-
 
 if (!file_exists($file)) {
     file_put_contents($file, json_encode(["games" => []], JSON_PRETTY_PRINT));
 }
 $games = json_decode(file_get_contents($file), true);
-
 
 if (isset($_POST['create'])) {
     $roomCode = strtoupper(substr(md5(time()), 0, 6));
@@ -25,10 +21,16 @@ if (isset($_POST['create'])) {
     exit;
 }
 
-
 if (isset($_POST['join'])) {
     $roomCode = strtoupper(trim($_POST['room_code']));
     if (isset($games['games'][$roomCode])) {
+        $username = $_SESSION['username'] ?? 'Guest'.rand(1000,9999);
+
+        if (!in_array($username, $games['games'][$roomCode]['players'])) {
+            $games['games'][$roomCode]['players'][] = $username;
+            file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+        }
+
         header("Location: game.php?code=$roomCode");
         exit;
     } else {
