@@ -4,8 +4,9 @@ session_start();
 
 include "../db.php";
 
-$games = json_decode(file_get_contents($file), true);
-$deckData = json_decode(file_get_contents($cardsFile), true);
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
 
 $action   = $_GET['action'] ?? null;
 $roomCode = $_GET['code'] ?? null;
