@@ -137,15 +137,13 @@ switch ($action) {
         $deck = $deckData['deck'];
         shuffle($deck);
 
-        $players = $game['players']; 
         $hands    = [];
         $faceup   = [];
         $facedown = [];
-
         foreach ($players as $p) {
-            $facedown[$p] = array_splice($deck, 0, 3);
-            $faceup[$p]   = array_splice($deck, 0, 3);
-            $hands[$p]    = array_splice($deck, 0, 3);
+            $facedown[$p] = [];
+            $faceup[$p]   = [];
+            $hands[$p]    = [];
         }
 
         $game['hands']    = $hands;
