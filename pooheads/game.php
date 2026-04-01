@@ -2,15 +2,38 @@
 <?php
 session_start();
 
+session_start();
+
 include "../chech.php"; 
-
-
+include "../db.php";
 
 $roomCode = $_GET['code'] ?? null;
 if (!$roomCode) die("No room code!");
 
-
 $username = $_SESSION['username'];
+
+
+$stmt = $conn->prepare("SELECT * FROM pooheads WHERE room_code = ?");
+$stmt->bind_param("s", $roomCode);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows === 0) {
+    die("Game not found!");
+}
+
+$game = $result->fetch_assoc();
+$players = json_decode($game['players'], true) ?? [];
+
+if (!in_array($username, $players)) {
+    $players[] = $username;
+
+    $playersJson = json_encode($players);
+
+    $stmt = $conn->prepare("UPDATE pooheads SET players = ? WHERE room_code = ?");
+    $stmt->bind_param("ss", $playersJson, $roomCode);
+    $stmt->execute();
+}
 ?>
 <!DOCTYPE html>
 <html>

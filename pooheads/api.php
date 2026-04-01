@@ -2,8 +2,7 @@
 <?php
 session_start();
 
-$file = __DIR__ . "/game.json";
-$cardsFile = __DIR__ . "/cards.json";
+include "../db.php";
 
 $games = json_decode(file_get_contents($file), true);
 $deckData = json_decode(file_get_contents($cardsFile), true);
@@ -12,8 +11,49 @@ $action   = $_GET['action'] ?? null;
 $roomCode = $_GET['code'] ?? null;
 $username = $_SESSION['username'] ?? null;
 
-if (!$roomCode || !isset($games['games'][$roomCode])) {
+$stmt = $conn->prepare("SELECT * FROM pooheads WHERE room_code = ?");
+$stmt->bind_param("s", $roomCode);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows === 0) {
     die(json_encode(["error" => "Game not found!"]));
+}
+
+$game = $result->fetch_assoc();
+
+$game['players']  = json_decode($game['players'], true) ?? [];
+$game['deck']     = json_decode($game['deck'], true) ?? [];
+$game['pile']     = json_decode($game['pile'], true) ?? [];
+$game['hands']    = json_decode($game['hands'] ?? "{}", true);
+$game['faceup']   = json_decode($game['faceup'] ?? "{}", true);
+$game['facedown'] = json_decode($game['facedown'] ?? "{}", true);
+
+function saveGame($conn, $roomCode, $game) {
+    $stmt = $conn->prepare("
+        UPDATE pooheads 
+        SET players=?, deck=?, pile=?, hands=?, faceup=?, facedown=?, turn=?, sevenRule=?, skipNext=? 
+        WHERE room_code=?
+    ");
+
+    $players  = json_encode($game['players']);
+    $deck     = json_encode($game['deck']);
+    $pile     = json_encode($game['pile']);
+    $hands    = json_encode($game['hands']);
+    $faceup   = json_encode($game['faceup']);
+    $facedown = json_encode($game['facedown']);
+
+    $turn = $game['turn'] ?? null;
+    $sevenRule = $game['sevenRule'] ?? false;
+    $skipNext = $game['skipNext'] ?? false;
+
+    $stmt->bind_param(
+        "sssssssiss",
+        $players, $deck, $pile, $hands, $faceup, $facedown,
+        $turn, $sevenRule, $skipNext, $roomCode
+    );
+
+    $stmt->execute();
 }
 
 function refillHand(&$game, $player) {
@@ -66,15 +106,15 @@ function checkWin(&$game, $username) {
 }
 
 
-if ($username && !in_array($username, $games['games'][$roomCode]['players'])) {
-    $gameHasStarted = isset($games['games'][$roomCode]['hands']);
-    if ($gameHasStarted) {
+if ($username && !in_array($username, $game['players'])) {
+
+    if (!empty($game['hands'])) {
         echo json_encode(["error" => "Game already started, cannot join."]);
         exit;
     }
-    
-    $games['games'][$roomCode]['players'][] = $username;
-    file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+
+    $game['players'][] = $username;
+    saveGame($conn, $roomCode, $game);
 }
 
 
@@ -108,8 +148,7 @@ switch ($action) {
         $game['pile']     = [];
         $game['turn']     = $players[0]; 
 
-        $games['games'][$roomCode] = $game;
-        file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+        saveGame($conn, $roomCode, $game);
         echo json_encode($game);
         break;
 
@@ -192,7 +231,7 @@ case "play":
         $game['skipNext'] = false;
         refillHand($game, $username);
         nextPlayer($game, $username);
-        file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+        saveGame($conn, $roomCode, $game);
         echo json_encode($game);
         return;
     }
@@ -204,7 +243,7 @@ case "play":
     }
     
     if (checkWin($game, $username)) {
-        file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+        saveGame($conn, $roomCode, $game);;
         echo json_encode($game);
         return;
     }
@@ -267,7 +306,7 @@ case "play":
         nextPlayer($game, $username);
     }
 
-    file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+    saveGame($conn, $roomCode, $game);
     echo json_encode($game);
     break;
 

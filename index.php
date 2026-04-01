@@ -18,10 +18,24 @@ include "chech.php";
         <?php include '../base/sidebar.php'; ?>
         <h2>Choose your game</h2>
         <?php
-        $chipsFile = "chips.json";
-        $chips = file_exists($chipsFile) ? json_decode(file_get_contents($chipsFile), true) : [];
+        include "db.php";
+
+        $username = $_SESSION['username'];
+        $stmt = $conn->prepare("SELECT chips FROM chips WHERE username = ?");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result->num_rows === 0) {
+            $stmt = $conn->prepare("INSERT INTO chips (username, chips) VALUES (?, 100)");
+            $stmt->bind_param("s", $username);
+            $stmt->execute();
+            $chips = 100;
+        } else {
+            $row = $result->fetch_assoc();
+            $chips = $row['chips'];
+        }
         
-        if (!isset($chips[$_SESSION['username']])) $chips[$_SESSION['username']] = 100;
         ?>
         <p>Chips: <?= $chips[$_SESSION['username']] ?></p>
 

@@ -1,19 +1,29 @@
 <?php
 session_start();
 
-$chipsFile = __DIR__ . "/../chips.json";
+include "../db.php";
 
 if (!isset($_SESSION['username'])) {
     $_SESSION['username'] = "Player" . rand(100, 999);
 }
 $username = $_SESSION['username'];
 
-$chips = file_exists($chipsFile) ? json_decode(file_get_contents($chipsFile), true) : [];
-if (!isset($chips[$username])) $chips[$username] = 0;
+$stmt = $conn->prepare("SELECT chips FROM chips WHERE username = ?");
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$result = $stmt->get_result();
 
-function saveChips($chipsFile, $chips) {
-    file_put_contents($chipsFile, json_encode($chips, JSON_PRETTY_PRINT));
+if ($result->num_rows === 0) {
+    $stmt = $conn->prepare("INSERT INTO chips (username, chips) VALUES (?, 100)");
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $chips = 100;
+} else {
+    $row = $result->fetch_assoc();
+    $chips = $row['chips'];
 }
+
+
 
 
 function getNewDeck() {
@@ -97,16 +107,18 @@ if ($_SESSION['finished']) {
         $bet = $_SESSION['bets'][$i];
         $total = cardValue($hand);
         if ($total==0) {
-            $chips[$username]-=$bet;
+            $chips -= $bet;
         } elseif ($total>21) { 
-            $chips[$username]-=$bet;
+            $chips -= $bet;
         } elseif ($dealerTotal>21 || $total>$dealerTotal) {
-            $chips[$username]+=$bet;
+            $chips += $bet;
         } elseif ($total<$dealerTotal) {
-            $chips[$username]-=$bet;
+            $chips -= $bet;
         }
     }
-    saveChips($chipsFile, $chips);
+    $stmt = $conn->prepare("UPDATE chips SET chips = ? WHERE username = ?");
+    $stmt->bind_param("is", $chips, $username);
+    $stmt->execute();
 }
 
 ?>
@@ -127,7 +139,7 @@ if ($_SESSION['finished']) {
         <div class="main">
             <div class = "tittle">
                 <h2>Blackjack – <?= htmlspecialchars($username) ?></h2>
-                <p>Your Chips: <strong><?= $chips[$username] ?></strong></p>
+                <p>Your Chips: <strong><?= $chips ?></strong></p>
             </div>
             <div class="yourhand">
                 <h3>Your Hands</h3>
