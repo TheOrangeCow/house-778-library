@@ -1,9 +1,9 @@
 <?php
 
-include "../chech.php"; 
-include "../db.php"
 
-$file = __DIR__ . "/game.json";
+include "../chech.php"; 
+include "../db.php";
+
 
 
 
