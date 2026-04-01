@@ -1,3 +1,5 @@
+
+
 let selectedCards = [];
 let pileIndex = 0;
 let currentPile = [];

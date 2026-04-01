@@ -1,47 +1,26 @@
 <?php
 
-
 include "../chech.php"; 
-include "../db.php";
 
 
+$file = __DIR__ . "/game.json";
 
+
+if (!file_exists($file)) {
+    file_put_contents($file, json_encode(["games" => []], JSON_PRETTY_PRINT));
+}
+$games = json_decode(file_get_contents($file), true);
 
 
 if (isset($_POST['create'])) {
     $roomCode = strtoupper(substr(md5(time()), 0, 6));
-
-    $stmt = $conn->prepare("
-        INSERT INTO pooheads 
-        (room_code, players, deck, pile, hands, faceup, facedown, turn, sevenRule, skipNext) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-    
-    $emptyPlayers = json_encode([]);
-    $emptyDeck = json_encode([]);
-    $emptyPile = json_encode([]);
-    $turn = null;
-
-    $emptyObject = json_encode(new stdClass());
-
-    $sevenRule = 0;
-    $skipNext = 0;
-
-    $stmt->bind_param(
-        "ssssssssii",
-        $roomCode,
-        $emptyPlayers,
-        $emptyDeck,
-        $emptyPile,
-        $emptyObject,
-        $emptyObject,
-        $emptyObject,
-        $turn,
-        $sevenRule,
-        $skipNext
-    );
-    $stmt->execute();
-
+    $games['games'][$roomCode] = [
+        "players" => [],
+        "deck" => [],
+        "pile" => [],
+        "turn" => null
+    ];
+    file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
     header("Location: game.php?code=$roomCode");
     exit;
 }
@@ -49,13 +28,7 @@ if (isset($_POST['create'])) {
 
 if (isset($_POST['join'])) {
     $roomCode = strtoupper(trim($_POST['room_code']));
-
-    $stmt = $conn->prepare("SELECT * FROM pooheads WHERE room_code = ?");
-    $stmt->bind_param("s", $roomCode);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($result->num_rows > 0) {
+    if (isset($games['games'][$roomCode])) {
         header("Location: game.php?code=$roomCode");
         exit;
     } else {
@@ -67,7 +40,7 @@ if (isset($_POST['join'])) {
 <html>
     <head>
         <title>Pooheads</title>
-        <meta charset="UTF-8">
+                <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>House</title>
         <link rel="stylesheet" href="style.css">
@@ -125,7 +98,7 @@ if (isset($_POST['join'])) {
         </style>
     </head>
     <body>
-        <h1>Pooheads (No Betting game)</h1>
+        <h1>Pooheads - No Betting game</h1>
         
         <form method="post">
             <button name="create">Create New Game</button><br><br>

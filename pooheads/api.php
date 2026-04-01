@@ -1,74 +1,22 @@
+
 <?php
 session_start();
-include "../db.php";
 
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
+$file = __DIR__ . "/game.json";
+$cardsFile = __DIR__ . "/cards.json";
+
+$games = json_decode(file_get_contents($file), true);
+$deckData = json_decode(file_get_contents($cardsFile), true);
 
 $action   = $_GET['action'] ?? null;
 $roomCode = $_GET['code'] ?? null;
 $username = $_SESSION['username'] ?? null;
 
-$stmt = $conn->prepare("SELECT * FROM pooheads WHERE room_code = ?");
-$stmt->bind_param("s", $roomCode);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($result->num_rows === 0) {
+if (!$roomCode || !isset($games['games'][$roomCode])) {
     die(json_encode(["error" => "Game not found!"]));
 }
 
-$game = $result->fetch_assoc();
-
-$game['players']  = json_decode($game['players'] ?? '[]', true) ?: [];
-$game['deck']     = json_decode($game['deck'] ?? '[]', true) ?: [];
-$game['pile']     = json_decode($game['pile'] ?? '[]', true) ?: [];
-$game['hands']    = json_decode($game['hands'] ?? '{}', true) ?: [];
-$game['faceup']   = json_decode($game['faceup'] ?? '{}', true) ?: [];
-$game['facedown'] = json_decode($game['facedown'] ?? '{}', true) ?: [];
-$game['turn']     = $game['turn'] ?? null;
-$game['sevenRule']= (int)($game['sevenRule'] ?? 0);
-$game['skipNext'] = (int)($game['skipNext'] ?? 0);
-
-$players = $game['players'];
-
-function saveGame($conn, $roomCode, $game) {
-    $stmt = $conn->prepare("
-        UPDATE pooheads 
-        SET players=?, deck=?, pile=?, hands=?, faceup=?, facedown=?, turn=?, sevenRule=?, skipNext=? 
-        WHERE room_code=?
-    ");
-
-    $playersJson  = json_encode($game['players']);
-    $deckJson     = json_encode($game['deck']);
-    $pileJson     = json_encode($game['pile']);
-    $handsJson    = json_encode($game['hands']);
-    $faceupJson   = json_encode($game['faceup']);
-    $facedownJson = json_encode($game['facedown']);
-    $turn         = $game['turn'] ?? null;
-    $sevenRule    = (int)($game['sevenRule'] ?? 0);
-    $skipNext     = (int)($game['skipNext'] ?? 0);
-
-    $stmt->bind_param(
-        "sssssssiss",
-        $playersJson, 
-        $deckJson, 
-        $pileJson, 
-        $handsJson, 
-        $faceupJson, 
-        $facedownJson,
-        $turn, 
-        $sevenRule, 
-        $skipNext, 
-        $roomCode
-    );
-
-    $stmt->execute();
-}
-
 function refillHand(&$game, $player) {
-    if (!isset($game['hands'][$player])) $game['hands'][$player] = [];
     while (count($game['hands'][$player]) < 3 && !empty($game['deck'])) {
         $game['hands'][$player][] = array_shift($game['deck']);
     }
@@ -76,17 +24,15 @@ function refillHand(&$game, $player) {
 
 function nextPlayer(&$game, $current) {
     $players = $game['players'];
-    if (empty($players)) return;
     $idx = array_search($current, $players);
-    $idx = ($idx === false ? 0 : ($idx + 1) % count($players));
+    $idx = ($idx + 1) % count($players);
     $game['turn'] = $players[$idx];
 }
 
 function nextPlayerN(&$game, $current, $n) {
     $players = $game['players'];
-    if (empty($players)) return;
     $idx = array_search($current, $players);
-    $idx = ($idx === false ? 0 : ($idx + $n + 1) % count($players));
+    $idx = ($idx + 1 + $n) % count($players);
     $game['turn'] = $players[$idx];
 }
 
@@ -97,34 +43,43 @@ function cardValue($c) {
 }
 
 function checkWin(&$game, $username) {
-    if (empty($game['hands'][$username] ?? []) &&
-        empty($game['faceup'][$username] ?? []) &&
-        empty($game['facedown'][$username] ?? [])) {
-        
-        unset($game['hands'][$username], $game['faceup'][$username], $game['facedown'][$username]);
+    if (empty($game['hands'][$username]) &&
+        empty($game['faceup'][$username]) &&
+        empty($game['facedown'][$username])) {
+
+        unset($game['hands'][$username]);
+        unset($game['faceup'][$username]);
+        unset($game['facedown'][$username]);
+
         if (($key = array_search($username, $game['players'])) !== false) {
             unset($game['players'][$key]);
             $game['players'] = array_values($game['players']);
         }
-        if ($game['turn'] === $username) nextPlayer($game, $username);
+
+        if ($game['turn'] === $username) {
+            nextPlayer($game, $username);
+        }
+
         return true;
     }
     return false;
 }
 
-if ($username && !in_array($username, $game['players'])) {
-    if (!empty($game['hands'])) {
+
+if ($username && !in_array($username, $games['games'][$roomCode]['players'])) {
+    $gameHasStarted = isset($games['games'][$roomCode]['hands']);
+    if ($gameHasStarted) {
         echo json_encode(["error" => "Game already started, cannot join."]);
         exit;
     }
-    $game['players'][] = $username;
-    $players = $game['players'];
-    saveGame($conn, $roomCode, $game);
+    
+    $games['games'][$roomCode]['players'][] = $username;
+    file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
 }
 
-$deckFile = __DIR__ . '/cards.json';
-if (!file_exists($deckFile)) die(json_encode(["error"=>"Deck file not found"]));
-$deckData = json_decode(file_get_contents($deckFile), true);
+
+$game =& $games['games'][$roomCode];
+
 
 switch ($action) {
     case "state":
@@ -134,112 +89,190 @@ switch ($action) {
     case "start":
         $deck = $deckData['deck'];
         shuffle($deck);
-        $hands = $faceup = $facedown = [];
+
+        $players = $game['players']; 
+        $hands    = [];
+        $faceup   = [];
+        $facedown = [];
+
         foreach ($players as $p) {
-            $hands[$p] = [];
-            $faceup[$p] = [];
-            $facedown[$p] = [];
+            $facedown[$p] = array_splice($deck, 0, 3);
+            $faceup[$p]   = array_splice($deck, 0, 3);
+            $hands[$p]    = array_splice($deck, 0, 3);
         }
-        $game['hands'] = $hands;
-        $game['faceup'] = $faceup;
+
+        $game['hands']    = $hands;
+        $game['faceup']   = $faceup;
         $game['facedown'] = $facedown;
-        $game['deck'] = $deck;
-        $game['pile'] = [];
-        $game['turn'] = $players[0] ?? null;
-        saveGame($conn, $roomCode, $game);
+        $game['deck']     = $deck;
+        $game['pile']     = [];
+        $game['turn']     = $players[0]; 
+
+        $games['games'][$roomCode] = $game;
+        file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
         echo json_encode($game);
         break;
 
-    case "play":
-        if ($game['turn'] !== $username) {
-            echo json_encode(["error" => "Not your turn"]);
-            exit;
-        }
-        $cards = $_GET['cards'] ?? null;
-        if (!$cards) { echo json_encode(["error"=>"No cards specified"]); exit; }
-        if (!is_array($cards)) $cards = [$cards];
+case "play":
+    if ($game['turn'] !== $username) {
+        echo json_encode(["error" => "Not your turn"]);
+        exit;
+    }
 
-        $ranksPlayed = array_map(fn($c)=>preg_replace('/[^0-9JQKA]/','',$c), $cards);
-        if (count(array_unique($ranksPlayed)) > 1) { echo json_encode(["error"=>"All cards must be same rank"]); exit; }
+    $cards = $_GET['cards'] ?? null;
+   if (!$cards) {
+        echo json_encode(["error" => "No cards specified"]);
+        exit;
+    }
+    if (!is_array($cards)) $cards = [$cards];
 
-        $cardRank = $ranksPlayed[0];
-        $topCard = end($game['pile']);
-        $cardValuePlayed = cardValue($cards[0]);
-        $canPlay = true;
+    $ranksPlayed = array_map(fn($c) => preg_replace('/[^0-9JQKA]/','',$c), $cards);
+    if (count(array_unique($ranksPlayed)) > 1) break;
 
-        $effectiveCard = $topCard;
-        if ($topCard) {
-            $lastRank = preg_replace('/[^0-9JQKA]/','', $topCard);
-            if ($lastRank === "3") {
-                for ($i=count($game['pile'])-1;$i>=0;$i--) {
-                    $tmpRank = preg_replace('/[^0-9JQKA]/','',$game['pile'][$i]);
-                    if ($tmpRank !== "3") { $effectiveCard = $game['pile'][$i]; break; }
+    $cardRank = $ranksPlayed[0];
+    $topCard = end($game['pile']);
+    $cardValuePlayed = cardValue($cards[0]);
+
+    $canPlay = true;
+
+    $effectiveCard = $topCard;
+    if ($topCard) {
+        $lastRank = preg_replace('/[^0-9JQKA]/','', $topCard);
+        if ($lastRank === "3") {
+            for ($i = count($game['pile']) - 1; $i >= 0; $i--) {
+                $tmpRank = preg_replace('/[^0-9JQKA]/','', $game['pile'][$i]);
+                if ($tmpRank !== "3") {
+                    $effectiveCard = $game['pile'][$i];
+                    break;
                 }
             }
         }
-        $effectiveValue = $effectiveCard ? cardValue($effectiveCard) : null;
-        $effRank = $effectiveCard ? preg_replace('/[^0-9JQKA]/','',$effectiveCard) : null;
+    }
+    $effectiveValue = $effectiveCard ? cardValue($effectiveCard) : null;
+    $effRank = $effectiveCard ? preg_replace('/[^0-9JQKA]/','', $effectiveCard) : null;
 
-        if ($cardRank==="10" && $effRank==="7") $canPlay=false;
-        if ($game['sevenRule'] && $cardValuePlayed>7) $canPlay=false;
-        elseif ($effectiveCard && !in_array($cardRank,["2","3","10"]) && $cardValuePlayed<$effectiveValue) $canPlay=false;
+    if ($cardRank === "10" && $effRank === "7") $canPlay = false;
 
-        $playerHand = $game['hands'][$username] ?? [];
-        $playerFaceup = $game['faceup'][$username] ?? [];
-        $playerFacedown = $game['facedown'][$username] ?? [];
-        if (!empty($playerHand) && array_diff($cards,$playerHand)) $canPlay=false;
-        if (empty($playerHand) && array_diff($cards,$playerFaceup) && array_diff($cards,$playerFacedown)) $canPlay=false;
 
-        if (!$canPlay) {
-            $pickup = array_merge($game['pile'],$cards);
-            foreach ($pickup as $c) if (!in_array($c,$playerHand)) $game['hands'][$username][]=$c;
-            $game['faceup'][$username] = array_values(array_diff($playerFaceup,$cards));
-            $game['facedown'][$username] = array_values(array_diff($playerFacedown,$cards));
-            $game['pile']=[];
-            $game['sevenRule']=0;
-            $game['skipNext']=0;
-            refillHand($game,$username);
-            nextPlayer($game,$username);
-            saveGame($conn,$roomCode,$game);
-            echo json_encode($game);
-            break;
+    if ($game['sevenRule']) {
+        if ($cardValuePlayed > 7) {
+            $canPlay = false;
         }
+    }
 
-        foreach ($cards as $c) {
-            $game['hands'][$username] = array_values(array_diff($game['hands'][$username],[$c]));
-            $game['faceup'][$username] = array_values(array_diff($game['faceup'][$username],[$c]));
-            $game['facedown'][$username] = array_values(array_diff($game['facedown'][$username],[$c]));
+        
+    else{
+       if ($effectiveCard && !in_array($cardRank, ["2","3", "10"]) && $cardValuePlayed < $effectiveValue) {
+            $canPlay = false;
+        } 
+    }
+
+    if (empty($game['hands'][$username])) {
+        if (!array_diff($cards, $game['faceup'][$username]) || !array_diff($cards, $game['facedown'][$username])) {
+            // OK
+        } else {
+            $canPlay = false;
         }
+    } else if (array_diff($cards, $game['hands'][$username])) {
+        $canPlay = false;
+    }
 
-        if (checkWin($game,$username)) { saveGame($conn,$roomCode,$game); echo json_encode($game); break; }
-
-        $game['pile'] = array_merge($game['pile'],$cards);
-
-        $extraTurn=false; $numEights=0;
-        foreach($cards as $c){
-            $r=preg_replace('/[^0-9JQKA]/','',$c);
-            switch($r){
-                case "2": $game['sevenRule']=0; $game['skipNext']=0; break;
-                case "3": if($effRank==="7") $game['sevenRule']=1; if($effRank==="8") $numEights++; break;
-                case "7": $game['sevenRule']=1; break;
-                case "8": $numEights++; break;
-                case "10": $game['pile']=[]; $extraTurn=true; break;
+    if (!$canPlay) {
+        $pickupCards = array_merge($game['pile'], $cards);
+        foreach ($pickupCards as $c) {
+            if (!in_array($c, $game['hands'][$username])) {
+                $game['hands'][$username][] = $c;
             }
         }
 
-        $lastFour = array_slice($game['pile'],-4);
-        $ranks = array_map(fn($c)=>preg_replace('/[^0-9JQKA]/','',$c),$lastFour);
-        if(count($ranks)===4 && count(array_unique($ranks))===1) { $game['pile']=[]; $extraTurn=true; }
-
-        refillHand($game,$username);
-        if($numEights>0) nextPlayerN($game,$username,$numEights);
-        elseif(!$extraTurn) nextPlayer($game,$username);
-
-        saveGame($conn,$roomCode,$game);
+    
+        $game['faceup'][$username]   = array_values(array_diff($game['faceup'][$username], $cards));
+        $game['facedown'][$username] = array_values(array_diff($game['facedown'][$username], $cards));
+    
+        $game['pile'] = [];
+        $game['sevenRule'] = false;
+        $game['skipNext'] = false;
+        refillHand($game, $username);
+        nextPlayer($game, $username);
+        file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
         echo json_encode($game);
-        break;
+        return;
+    }
 
-    default:
-        echo json_encode(["error"=>"Invalid action"]);
-        break;
+    foreach ($cards as $c) {
+        $game['hands'][$username]    = array_values(array_diff($game['hands'][$username], [$c]));
+        $game['faceup'][$username]   = array_values(array_diff($game['faceup'][$username], [$c]));
+        $game['facedown'][$username] = array_values(array_diff($game['facedown'][$username], [$c]));
+    }
+    
+    if (checkWin($game, $username)) {
+        file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+        echo json_encode($game);
+        return;
+    }
+
+
+    $game['pile'] = array_merge($game['pile'], $cards);
+    
+    if ($game['sevenRule'] && $cardValuePlayed <= 7) {
+        $game['sevenRule'] = false;
+    }
+
+    $extraTurn = false;
+    $numEights = 0;
+
+    foreach ($cards as $c) {
+        $r = preg_replace('/[^0-9JQKA]/','',$c);
+        switch($r){
+            case "2":
+                $game['sevenRule'] = false;
+                $game['skipNext'] = false;
+                break;
+            case "3":
+                if ($effRank === "7")  $game['sevenRule'] = true;
+                if ($effRank === "8")  $numEights++;
+                break;
+            case "7":
+                $game['sevenRule'] = true; 
+                break;
+
+            case "8":
+                $numEights++;
+                break;
+            case "10":
+                $game['pile'] = [];
+                $extraTurn = true;
+                break;
+        }
+    }
+
+    $pileCount = count($game['pile']);
+    if ($pileCount >= 4) {
+        $lastFour = array_slice($game['pile'], -4);
+
+        $ranks = array_map(
+            fn($c) => preg_replace('/[^0-9JQKA]/', '', $c),
+            $lastFour
+        );
+    
+        if (count(array_unique($ranks)) === 1) {
+            $game['pile'] = [];
+            $extraTurn = true;
+        }
+    }
+
+    refillHand($game, $username);
+
+    if($numEights > 0){
+        nextPlayerN($game, $username, $numEights);
+    } else if (!$extraTurn){
+        nextPlayer($game, $username);
+    }
+
+    file_put_contents($file, json_encode($games, JSON_PRETTY_PRINT));
+    echo json_encode($game);
+    break;
+
+
+
 }

@@ -1,5 +1,21 @@
 <?php
 include "chech.php"; 
+$username = $_SESSION['username'];
+
+$stmt = $conn->prepare("SELECT chips FROM chips WHERE username = ?");
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows === 0) {
+    $stmt = $conn->prepare("INSERT INTO chips (username, chips) VALUES (?, 100)");
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $chips = 100;
+} else {
+    $row = $result->fetch_assoc();
+    $chips = $row['chips'];
+}
 ?>
 
 
@@ -37,7 +53,7 @@ include "chech.php";
         }
         
         ?>
-        <p>Chips: <?= $chips[$_SESSION['username']] ?></p>
+        <p>Your Chips: <strong><?= $chips ?></strong></p>
 
     
         <button onclick="window.location.href='https://library.house-778.theorangecow.org/pooheads/';">
