@@ -118,6 +118,13 @@ if ($username && !in_array($username, $game['players'])) {
     saveGame($conn, $roomCode, $game);
 }
 
+$deckFile = __DIR__ . '/cards.json';
+if (file_exists($deckFile)) {
+    $deckJson = file_get_contents($deckFile);
+    $deckData = json_decode($deckJson, true);
+} else {
+    die(json_encode(["error" => "Deck file not found"]));
+}
 
 $game =& $games['games'][$roomCode];
 
