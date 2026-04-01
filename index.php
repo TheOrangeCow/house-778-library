@@ -1,5 +1,6 @@
 <?php
 include "chech.php"; 
+include "db.php";
 $username = $_SESSION['username'];
 
 $stmt = $conn->prepare("SELECT chips FROM chips WHERE username = ?");
