@@ -44,8 +44,8 @@ function saveGame($conn, $roomCode, $game) {
     $facedown = json_encode($game['facedown']);
 
     $turn = $game['turn'] ?? null;
-    $sevenRule = $game['sevenRule'] ?? false;
-    $skipNext = $game['skipNext'] ?? false;
+    $sevenRule = isset($game['sevenRule']) ? (int)$game['sevenRule'] : 0;
+    $skipNext  = isset($game['skipNext']) ? (int)$game['skipNext'] : 0;
 
     $stmt->bind_param(
         "sssssssiss",
