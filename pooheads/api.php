@@ -21,7 +21,6 @@ if ($result->num_rows === 0) {
     die(json_encode(["error" => "Game not found!"]));
 }
 
-$game = $result->fetch_assoc();
 
 $game['players']  = json_decode($game['players'], true) ?? [];
 $game['deck']     = json_decode($game['deck'], true) ?? [];
