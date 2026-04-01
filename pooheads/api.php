@@ -21,13 +21,17 @@ if ($result->num_rows === 0) {
     die(json_encode(["error" => "Game not found!"]));
 }
 
+$game = $result->fetch_assoc();
 
-$game['players']  = json_decode($game['players'], true) ?? [];
-$game['deck']     = json_decode($game['deck'], true) ?? [];
-$game['pile']     = json_decode($game['pile'], true) ?? [];
-$game['hands']    = json_decode($game['hands'] ?? "{}", true);
-$game['faceup']   = json_decode($game['faceup'] ?? "{}", true);
-$game['facedown'] = json_decode($game['facedown'] ?? "{}", true);
+$game['players'] = isset($game['players']) ? json_decode($game['players'], true) : [];
+$game['deck'] = isset($game['deck']) ? json_decode($game['deck'], true) : [];
+$game['pile'] = isset($game['pile']) ? json_decode($game['pile'], true) : [];
+$game['hands'] = isset($game['hands']) ? json_decode($game['hands'], true) : [];
+$game['faceup'] = isset($game['faceup']) ? json_decode($game['faceup'], true) : [];
+$game['facedown'] = isset($game['facedown']) ? json_decode($game['facedown'], true) : [];
+$game['turn'] = $game['turn'] ?? null;
+$game['sevenRule'] = isset($game['sevenRule']) ? (int)$game['sevenRule'] : 0;
+$game['skipNext'] = isset($game['skipNext']) ? (int)$game['skipNext'] : 0;
 
 function saveGame($conn, $roomCode, $game) {
     $stmt = $conn->prepare("
