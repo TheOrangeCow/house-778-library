@@ -219,36 +219,39 @@ function refreshGame() {
             others.innerHTML = "";
 
 
+            if (data.hands && typeof data.hands === 'object') {
+   
 
-            Object.keys(data.hands).forEach(player => {
-                if (player === you) return;
+                Object.keys(data.hands).forEach(player => {
+                    if (player === you) return;
 
-                let handSize = data.hands[player].length;
-                let faceup = data.faceup[player] || [];
-                let facedown = data.facedown[player] || [];
+                    let handSize = data.hands[player].length;
+                    let faceup = data.faceup[player] || [];
+                    let facedown = data.facedown[player] || [];
 
 
-                if (handSize === 0 && faceup.length === 0 && facedown.length === 0) {
-                    let wininglist = document.getElementById("wininglist");
-                    wininglist.innerHTML += `
-                                <div class="player-block">
-                                    <h3>${player}</h3>
-                                    <p><b>Status:</b> Out </p>
-                                </div>
-                            `;
-                } else {
-                    others.innerHTML += `
-                                <div class="player-block">
-                                    <h3>${player}</h3>
-                                    <p><b>Cards in Hand:</b> ${handSize}</p>
-                                    <p><b>Face-Up:</b> 
-                                        ${faceup.length ? faceup.map(c => `[${c}]`).join(" ") : "(none)"}
-                                    </p>
-                                    <p><b>Face-Down:</b> ${facedown.length} hidden cards</p>
-                                </div>
-                            `;
-                }
-            });
+                    if (handSize === 0 && faceup.length === 0 && facedown.length === 0) {
+                        let wininglist = document.getElementById("wininglist");
+                        wininglist.innerHTML += `
+                                    <div class="player-block">
+                                        <h3>${player}</h3>
+                                        <p><b>Status:</b> Out </p>
+                                    </div>
+                                `;
+                    } else {
+                        others.innerHTML += `
+                                    <div class="player-block">
+                                        <h3>${player}</h3>
+                                        <p><b>Cards in Hand:</b> ${handSize}</p>
+                                        <p><b>Face-Up:</b> 
+                                            ${faceup.length ? faceup.map(c => `[${c}]`).join(" ") : "(none)"}
+                                        </p>
+                                        <p><b>Face-Down:</b> ${facedown.length} hidden cards</p>
+                                    </div>
+                                `;
+                    }
+                });
+            }
         });
 }
 
