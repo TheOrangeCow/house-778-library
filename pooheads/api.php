@@ -39,19 +39,31 @@ function saveGame($conn, $roomCode, $game) {
         SET players=?, deck=?, pile=?, hands=?, faceup=?, facedown=?, turn=?, sevenRule=?, skipNext=? 
         WHERE room_code=?
     ");
+
+    $playersJson  = json_encode($game['players']);
+    $deckJson     = json_encode($game['deck']);
+    $pileJson     = json_encode($game['pile']);
+    $handsJson    = json_encode($game['hands']);
+    $faceupJson   = json_encode($game['faceup']);
+    $facedownJson = json_encode($game['facedown']);
+    $turn         = $game['turn'] ?? null;
+    $sevenRule    = (int)($game['sevenRule'] ?? 0);
+    $skipNext     = (int)($game['skipNext'] ?? 0);
+
     $stmt->bind_param(
         "sssssssiss",
-        json_encode($game['players']),
-        json_encode($game['deck']),
-        json_encode($game['pile']),
-        json_encode($game['hands']),
-        json_encode($game['faceup']),
-        json_encode($game['facedown']),
-        $game['turn'] ?? null,
-        (int)($game['sevenRule'] ?? 0),
-        (int)($game['skipNext'] ?? 0),
+        $playersJson, 
+        $deckJson, 
+        $pileJson, 
+        $handsJson, 
+        $faceupJson, 
+        $facedownJson,
+        $turn, 
+        $sevenRule, 
+        $skipNext, 
         $roomCode
     );
+
     $stmt->execute();
 }
 
