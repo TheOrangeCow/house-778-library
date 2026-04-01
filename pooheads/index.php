@@ -11,14 +11,35 @@ include "../db.php";
 if (isset($_POST['create'])) {
     $roomCode = strtoupper(substr(md5(time()), 0, 6));
 
-    $stmt = $conn->prepare("INSERT INTO pooheads (room_code, players, deck, pile, turn) VALUES (?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("
+        INSERT INTO pooheads 
+        (room_code, players, deck, pile, hands, faceup, facedown, turn, sevenRule, skipNext) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
     
     $emptyPlayers = json_encode([]);
     $emptyDeck = json_encode([]);
     $emptyPile = json_encode([]);
     $turn = null;
 
-    $stmt->bind_param("sssss", $roomCode, $emptyPlayers, $emptyDeck, $emptyPile, $turn);
+    $emptyObject = json_encode(new stdClass());
+
+    $sevenRule = 0;
+    $skipNext = 0;
+
+    $stmt->bind_param(
+        "ssssssssii",
+        $roomCode,
+        $emptyPlayers,
+        $emptyDeck,
+        $emptyPile,
+        $emptyObject,
+        $emptyObject,
+        $emptyObject,
+        $turn,
+        $sevenRule,
+        $skipNext
+    );
     $stmt->execute();
 
     header("Location: game.php?code=$roomCode");
